@@ -38,7 +38,9 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/chat", {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+      const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -54,9 +56,7 @@ function App() {
         time: currentTime,
       };
 
-      setMessages((prev) =>
-        prev.map((msg) => (msg.loading ? botMsg : msg))
-      );
+      setMessages((prev) => prev.map((msg) => (msg.loading ? botMsg : msg)));
     } catch (error) {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -76,15 +76,12 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-blue-100">
-      
       {/* Header */}
       <div className="p-4 text-center border-b bg-white">
         <h1 className="text-lg font-semibold text-gray-800">
           AI Mental Health Buddy
         </h1>
-        <p className="text-sm text-gray-500">
-          A space to talk and reflect
-        </p>
+        <p className="text-sm text-gray-500">A space to talk and reflect</p>
       </div>
 
       {/* Chat */}
