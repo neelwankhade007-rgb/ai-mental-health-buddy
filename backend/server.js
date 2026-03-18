@@ -6,36 +6,62 @@ import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// OpenRouter config
+// OpenRouter setup
 const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+app.get("/", (req, res) => {
+  res.send("Backend running 🚀");
 });
 
 app.post("/chat", async (req, res) => {
   try {
     const { message } = req.body;
 
-    const completion = await openai.chat.completions.create({
+    // STEP 1: Detect mood
+    const moodResponse = await openai.chat.completions.create({
       model: "meta-llama/llama-3-8b-instruct",
-      temperature: 0.6, // more natural responses
+      temperature: 0,
       messages: [
         {
           role: "system",
           content: `
-You are a supportive mental health assistant for students.
+Classify the user's mood into ONE word only:
+Happy, Sad, Stressed, Anxious, Neutral
 
-Respond naturally and conversationally:
-- Show empathy
-- Understand the user's feelings
-- Give helpful and practical suggestions
+Only return the word. No sentence.
+`,
+        },
+        {
+          role: "user",
+          content: message,
+        },
+      ],
+    });
 
-Do not restrict response length.
-Avoid robotic formatting.
-Keep it human and easy to understand.
+    const mood = moodResponse.choices[0].message.content.trim();
+
+    // STEP 2: Generate reply
+    const chatResponse = await openai.chat.completions.create({
+      model: "meta-llama/llama-3-8b-instruct",
+      temperature: 0.7,
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a supportive mental health assistant.
+
+User mood: ${mood}
+
+- Be empathetic
+- Respond naturally
+- Give helpful suggestions
 `,
         },
         {
@@ -46,16 +72,18 @@ Keep it human and easy to understand.
     });
 
     res.json({
-      reply: completion.choices[0].message.content,
+      reply: chatResponse.choices[0].message.content,
+      mood: mood,
     });
   } catch (error) {
-    console.error("ERROR:", error);
+    console.error(error);
     res.status(500).json({
-      reply: "Something went wrong. Please try again.",
+      reply: "Something went wrong",
+      mood: "Neutral",
     });
   }
 });
 
 app.listen(5000, () => {
-  console.log("Server running on port 5000");
+  console.log("Server running on http://localhost:5000");
 });
