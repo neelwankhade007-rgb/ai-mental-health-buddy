@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
 function App() {
-
   // 🔥 Emoji map
   const moodEmoji = {
     Happy: "😊",
@@ -57,7 +56,7 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/chat", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -82,7 +81,6 @@ function App() {
         if (index !== -1) updated[index] = botMsg;
         return updated;
       });
-
     } catch (error) {
       console.error(error);
 
@@ -105,7 +103,6 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-blue-100">
-      
       {/* Header */}
       <div className="p-4 text-center border-b bg-white">
         <h1 className="text-lg font-semibold text-gray-800">
@@ -124,7 +121,6 @@ function App() {
             }`}
           >
             <div className="max-w-lg">
-
               {/* 🔥 MOOD BADGE (NEW) */}
               {msg.sender === "bot" && msg.mood && (
                 <span
