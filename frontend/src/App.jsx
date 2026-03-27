@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 function App() {
   // 🔥 Emoji map
