@@ -2,6 +2,8 @@
 
 A full-stack AI-powered mental health assistant for students.
 
+[**Live Demo**](https://ai-mental-health-buddy.vercel.app/)
+
 ## Features
 - Real-time chat interface
 - AI-powered emotional support
