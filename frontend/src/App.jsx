@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-
-import { Moon, Sun, Send, Bot, User } from "lucide-react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Moon, Sun, Send, Sparkles, Smile, HeartPulse } from "lucide-react";
 
 function App() {
   // state for dark mode
@@ -10,7 +10,7 @@ function App() {
       if (saved !== null) {
         return JSON.parse(saved);
       }
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return false; 
     }
     return false;
   });
@@ -28,25 +28,33 @@ function App() {
 
   // 🔥 Emoji map
   const moodEmoji = {
-    Happy: "😊",
-    Sad: "😔",
-    Stressed: "😣",
-    Anxious: "😰",
-    Neutral: "😐",
+    Happy: "✨",
+    Sad: "🌧️",
+    Stressed: "⛈️",
+    Anxious: "🍃",
+    Neutral: "☕",
   };
 
-  // 🔥 Color map (BONUS)
+  // 🔥 Color map 
   const moodColor = {
-    Happy: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
-    Sad: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
-    Stressed: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300",
-    Anxious: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-    Neutral: "bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300",
+    Happy: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300 border border-pink-200 dark:border-pink-800 animate-pulse shadow-[0_0_15px_rgba(244,114,182,0.4)]",
+    Sad: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+    Stressed: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300 border border-orange-200 dark:border-orange-800",
+    Anxious: "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300 border border-teal-200 dark:border-teal-800",
+    Neutral: "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300 border border-gray-200 dark:border-slate-600",
   };
+
+  const affirmations = [
+    "Take a deep breath. You are doing your best, and that is enough. 🌸",
+    "It's okay to feel whatever you're feeling right now. 💛",
+    "You are worthy of care, especially from yourself. ✨",
+    "One step at a time. Be gentle with your mind today. 🍃"
+  ];
+  const [dailyAffirmation] = useState(() => affirmations[Math.floor(Math.random() * affirmations.length)]);
 
   const [messages, setMessages] = useState([
     {
-      text: "Hey, how are you feeling today?",
+      text: "Hi there! I'm here to listen. How is your heart doing today?",
       sender: "bot",
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -114,7 +122,7 @@ function App() {
         const index = updated.findIndex((msg) => msg.loading);
         if (index !== -1) {
           updated[index] = {
-            text: "Unable to connect. Please check your backend.",
+            text: "Oh no, I couldn't reach my server. Could you make sure it's running? 🥺",
             sender: "bot",
             time,
           };
@@ -127,69 +135,86 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-300">
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-500 bg-gradient-to-br from-rose-50 via-pink-50 to-purple-100 dark:from-indigo-950 dark:via-purple-900 dark:to-slate-900 overflow-hidden relative">
+      {/* Decorative Blob Background Effects */}
+      <div className="absolute top-[-100px] left-[-100px] w-96 h-96 bg-pink-300/30 dark:bg-fuchsia-600/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-70 animate-pulse duration-1000 z-0"></div>
+      <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 bg-purple-300/30 dark:bg-indigo-600/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-70 animate-pulse duration-[3000ms] delay-1000 z-0"></div>
+
       {/* Header */}
-      <header className="sticky top-0 z-10 backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border-b border-gray-200 dark:border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm transition-colors duration-300">
+      <header className="relative z-10 sticky top-0 backdrop-blur-xl bg-white/60 dark:bg-slate-900/60 border-b border-rose-100 dark:border-purple-800/50 px-6 py-4 flex justify-between items-center shadow-sm transition-colors duration-500">
         <div>
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent flex items-center gap-2">
-            <Bot className="w-6 h-6 text-blue-500 dark:text-blue-400" />
-            AI Mental Health Buddy
+          <h1 className="text-xl font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 dark:from-pink-400 dark:to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-pink-500 dark:text-pink-400 fill-pink-500/20" />
+            Vibe Catcher
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 ml-8">A space to talk and reflect</p>
+          <p className="text-[13px] font-medium text-purple-600/60 dark:text-purple-300/60 mt-0.5 ml-8">A cozy corner for your mind</p>
         </div>
         <button
           onClick={toggleDarkMode}
-          className="p-2.5 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300 transition-all duration-300 hover:scale-105 active:scale-95 shadow-inner"
+          className="p-2.5 rounded-full bg-white/80 hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-rose-500 dark:text-pink-300 transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm border border-rose-100 dark:border-slate-700"
           aria-label="Toggle dark mode"
         >
-          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 fill-rose-500/10" />}
         </button>
       </header>
 
       {/* Chat Area */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
+      <main className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto scroll-smooth">
+        
+        {/* Daily Affirmation Card */}
+        <div className="flex justify-center mb-8 mt-4">
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md px-6 py-4 rounded-3xl shadow-sm border border-rose-100 dark:border-slate-700/50 flex flex-col items-center gap-2 max-w-sm text-center transform hover:scale-[1.02] transition-transform duration-300">
+             <HeartPulse className="w-6 h-6 text-pink-400 animate-bounce" />
+             <p className="text-sm font-medium text-gray-700 dark:text-gray-200 leading-relaxed italic">
+               "{dailyAffirmation}"
+             </p>
+          </div>
+        </div>
+
         {messages.map((msg, index) => (
           <div
             key={index}
             className={`flex flex-col ${
               msg.sender === "user" ? "items-end text-right" : "items-start text-left"
-            } duration-300 ease-out`}
+            } duration-500 ease-out`}
             style={{ animationFillMode: 'both' }}
           >
             {/* Mood Badge */}
             {msg.sender === "bot" && msg.mood && (
               <span
-                className={`text-xs px-2.5 py-1 rounded-full mb-2 inline-flex items-center gap-1 shadow-sm font-medium ${moodColor[msg.mood]} transition-colors duration-300`}
+                className={`text-xs px-3 py-1.5 rounded-full mb-2 inline-flex items-center gap-1.5 shadow-sm font-bold ${moodColor[msg.mood]} transition-all duration-500 transform hover:-translate-y-1 cursor-default`}
               >
-                {moodEmoji[msg.mood] || "😐"} <span className="uppercase tracking-wider text-[10px]">{msg.mood}</span>
+                {moodEmoji[msg.mood] || "💌"} <span className="uppercase tracking-widest text-[10px]">{msg.mood}</span>
               </span>
             )}
 
             <div
-              className={`flex items-end gap-2 max-w-[85%] sm:max-w-lg ${
+              className={`flex items-end gap-3 max-w-[85%] sm:max-w-lg ${
                 msg.sender === "user" ? "flex-row-reverse" : "flex-row"
               }`}
             >
               {/* Avatar */}
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-colors duration-300 ${
-                msg.sender === 'user' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'
+              <div className={`flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center shadow-md transition-colors duration-500 transform rotate-3 hover:rotate-12 ${
+                msg.sender === 'user' 
+                  ? 'bg-gradient-to-br from-purple-400 to-indigo-500 text-white' 
+                  : 'bg-gradient-to-br from-pink-400 to-rose-400 text-white'
               }`}>
-                 {msg.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                 {msg.sender === 'user' ? <Smile className="w-5 h-5 fill-white/20" /> : <Sparkles className="w-5 h-5 fill-white/20" />}
               </div>
 
               {/* Message Bubble */}
               <div
-                className={`relative px-5 py-3.5 text-sm sm:text-base whitespace-pre-wrap break-words shadow-sm leading-relaxed transition-colors duration-300 ${
+                className={`relative px-6 py-4 text-[15px] sm:text-base whitespace-pre-wrap break-words shadow-sm leading-relaxed transition-all duration-500 ${
                   msg.sender === "user"
-                    ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl rounded-br-sm"
-                    : "bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-slate-700/50 rounded-2xl rounded-bl-sm"
+                    ? "bg-gradient-to-br from-purple-500 to-indigo-500 dark:from-purple-600 dark:to-indigo-600 text-white rounded-3xl rounded-br-sm shadow-purple-500/20"
+                    : "bg-white/90 dark:bg-slate-800/90 backdrop-blur-md text-gray-800 dark:text-gray-100 border border-rose-50 dark:border-slate-700/50 rounded-3xl rounded-bl-sm font-medium shadow-rose-100/50 dark:shadow-none"
                 }`}
               >
                 {msg.loading ? (
-                  <div className="flex gap-1 items-center h-5 px-1">
-                     <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                     <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                     <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  <div className="flex gap-1.5 items-center h-6 px-2">
+                     <span className="w-2.5 h-2.5 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                     <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                     <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
                   </div>
                 ) : (
                   msg.text
@@ -199,21 +224,21 @@ function App() {
 
             {/* Timestamp */}
             {!msg.loading && (
-              <p className={`text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 transition-colors duration-300 ${msg.sender === 'user' ? 'mr-10' : 'ml-10'}`}>
+              <p className={`text-[11px] font-medium text-gray-400 dark:text-gray-500 mt-2 transition-colors duration-500 ${msg.sender === 'user' ? 'mr-12' : 'ml-12'}`}>
                 {msg.time}
               </p>
             )}
           </div>
         ))}
 
-        <div ref={chatEndRef} className="h-4" />
+        <div ref={chatEndRef} className="h-6" />
       </main>
 
       {/* Input Form */}
-      <div className="p-4 sm:p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-slate-800 transition-colors duration-300">
+      <div className="relative z-10 p-4 sm:p-6 bg-white/60 dark:bg-slate-900/60 backdrop-blur-2xl border-t border-rose-100 dark:border-purple-900/50 transition-colors duration-500 pb-safe">
         <div className="max-w-4xl mx-auto flex gap-3 relative items-end">
           <textarea
-            className="flex-1 px-5 py-4 rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 resize-none text-[15px] shadow-inner"
+            className="flex-1 px-6 py-4 rounded-3xl border-2 border-transparent bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:border-pink-300 dark:focus:border-purple-500 focus:ring-4 focus:ring-pink-100 dark:focus:ring-purple-900/30 transition-all duration-300 resize-none text-[15px] shadow-sm font-medium"
             rows={1}
             value={input}
             disabled={loading}
@@ -224,20 +249,20 @@ function App() {
                 sendMessage();
               }
             }}
-            placeholder="Type how you feel..."
+            placeholder="Tell me what's on your mind today..."
           />
 
           <button
             onClick={sendMessage}
             disabled={loading || !input.trim()}
-            className={`p-4 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm ${
+            className={`p-4 rounded-full flex items-center justify-center transition-all duration-300 aspect-square h-[56px] ${
               loading || !input.trim()
-                ? "bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white hover:scale-105 active:scale-95 shadow-blue-500/25"
+                ? "bg-gray-200 text-gray-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed shadow-none"
+                : "bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white hover:scale-110 active:scale-95 shadow-lg shadow-pink-500/30"
             }`}
             aria-label="Send message"
           >
-             <Send className={`w-5 h-5 ${loading ? 'animate-pulse' : ''} ${!input.trim() && !loading ? 'opacity-50' : 'opacity-100'}`} />
+             <Send className={`w-5 h-5 ${loading ? 'animate-pulse' : ''} ${!input.trim() && !loading ? 'opacity-50' : 'opacity-100'} -ml-0.5 mt-0.5`} />
           </button>
         </div>
       </div>
