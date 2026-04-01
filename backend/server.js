@@ -22,21 +22,16 @@ app.get("/", (req, res) => {
 
 app.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, history = [] } = req.body;
 
-    // STEP 1: Detect mood
+    // STEP 1: Detect mood from latest message
     const moodResponse = await openai.chat.completions.create({
       model: "meta-llama/llama-3-8b-instruct",
       temperature: 0,
       messages: [
         {
           role: "system",
-          content: `
-Classify the user's mood into ONE word only:
-Happy, Sad, Stressed, Anxious, Neutral
-
-Only return the word. No sentence.
-`,
+          content: `Classify the user's mood into ONE word only: Happy, Sad, Stressed, Anxious, Neutral. Only return the word. No sentence.`,
         },
         {
           role: "user",
@@ -45,30 +40,42 @@ Only return the word. No sentence.
       ],
     });
 
-    const mood = moodResponse.choices[0].message.content.trim();
+    const rawMood = moodResponse.choices[0].message.content.trim();
+    const validMoods = ["Happy", "Sad", "Stressed", "Anxious", "Neutral"];
+    const mood = validMoods.find((m) => rawMood.toLowerCase().includes(m.toLowerCase())) || "Neutral";
 
-    // STEP 2: Generate reply
+    // STEP 2: Build conversation messages with history
+    const systemPrompt = {
+      role: "system",
+      content: `You are a warm, grounded AI mental health buddy named Vibe Catcher.
+
+The user's current mood is: ${mood}.
+
+Your rules:
+- Keep replies SHORT — 2 to 4 sentences max. No long paragraphs.
+- Speak like a caring, calm friend. Not a therapist. Not a romantic partner.
+- If the mood is Sad or Anxious: be extra gentle, validate their feelings first before anything else.
+- If the mood is Stressed: acknowledge it and offer one simple, practical grounding tip.
+- If the mood is Happy: match their energy warmly and encourage them to keep going.
+- If the mood is Neutral: be friendly and check in gently.
+- If the user mentions self-harm, feeling hopeless, or being in crisis, respond with care and gently encourage them to reach out to a trusted person or a helpline (like iCall: 9152987821 for India).
+- Use simple, everyday words. No jargon, no overly poetic language.
+- Never give medical diagnoses or advice.`,
+    };
+
+    // Convert history to OpenAI message format
+    const conversationHistory = history.map((msg) => ({
+      role: msg.sender === "user" ? "user" : "assistant",
+      content: msg.text,
+    }));
+
     const chatResponse = await openai.chat.completions.create({
       model: "meta-llama/llama-3-8b-instruct",
       temperature: 0.7,
       messages: [
-        {
-          role: "system",
-          content: `
-You are a supportive, simple, and friendly AI mental health buddy.
-
-User mood: ${mood}
-
-- Speak in a casual, approachable, and comforting tone, like a reliable friend, but maintain appropriate boundaries.
-- Keep your replies slightly cute but grounded. Avoid being excessively romantic, girly, or acting like a partner.
-- Use simple words and everyday vocabulary. Do not use overly poetic or complex language.
-- Be deeply empathetic and highly supportive. Give clear, practical, and gentle suggestions to help the user feel better.
-`,
-        },
-        {
-          role: "user",
-          content: message,
-        },
+        systemPrompt,
+        ...conversationHistory,
+        { role: "user", content: message },
       ],
     });
 
@@ -79,7 +86,7 @@ User mood: ${mood}
   } catch (error) {
     console.error(error);
     res.status(500).json({
-      reply: "Something went wrong",
+      reply: "Something went wrong on my end. Please try again in a moment.",
       mood: "Neutral",
     });
   }

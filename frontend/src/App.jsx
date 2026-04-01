@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Moon, Sun, Send, Sparkles, Smile, HeartPulse } from "lucide-react";
+import { Moon, Sun, Send, Sparkles, Smile, HeartPulse, Trash2 } from "lucide-react";
 
 function App() {
   // state for dark mode
@@ -52,16 +52,31 @@ function App() {
   ];
   const [dailyAffirmation] = useState(() => affirmations[Math.floor(Math.random() * affirmations.length)]);
 
-  const [messages, setMessages] = useState([
-    {
-      text: "Hi there! I'm here to listen. How is your heart doing today?",
-      sender: "bot",
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    },
-  ]);
+  const welcomeMessage = {
+    text: "Hi there! I'm here to listen. How is your heart doing today?",
+    sender: "bot",
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  };
+
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem("chatHistory");
+      return saved ? JSON.parse(saved) : [welcomeMessage];
+    } catch {
+      return [welcomeMessage];
+    }
+  });
+
+  // Save messages to localStorage on every update (skip loading placeholders)
+  useEffect(() => {
+    const toSave = messages.filter((m) => !m.loading);
+    localStorage.setItem("chatHistory", JSON.stringify(toSave));
+  }, [messages]);
+
+  const clearChat = () => {
+    localStorage.removeItem("chatHistory");
+    setMessages([welcomeMessage]);
+  };
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -89,12 +104,15 @@ function App() {
     setLoading(true);
 
     try {
+      // Send history (excluding loading placeholders) for context
+      const history = messages.filter((m) => !m.loading);
+
       const res = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userInput }),
+        body: JSON.stringify({ message: userInput, history }),
       });
 
       if (!res.ok) throw new Error("API error");
@@ -149,13 +167,23 @@ function App() {
           </h1>
           <p className="text-[13px] font-medium text-purple-600/60 dark:text-purple-300/60 mt-0.5 ml-8">A cozy corner for your mind</p>
         </div>
-        <button
-          onClick={toggleDarkMode}
-          className="p-2.5 rounded-full bg-white/80 hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-rose-500 dark:text-pink-300 transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm border border-rose-100 dark:border-slate-700"
-          aria-label="Toggle dark mode"
-        >
-          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 fill-rose-500/10" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={clearChat}
+            title="Clear chat history"
+            className="p-2.5 rounded-full bg-white/80 hover:bg-red-50 dark:bg-slate-800/80 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-400 dark:text-slate-500 dark:hover:text-red-400 transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm border border-rose-100 dark:border-slate-700"
+            aria-label="Clear chat"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={toggleDarkMode}
+            className="p-2.5 rounded-full bg-white/80 hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-rose-500 dark:text-pink-300 transition-all duration-300 hover:scale-110 active:scale-95 shadow-sm border border-rose-100 dark:border-slate-700"
+            aria-label="Toggle dark mode"
+          >
+            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5 fill-rose-500/10" />}
+          </button>
+        </div>
       </header>
 
       {/* Chat Area */}
