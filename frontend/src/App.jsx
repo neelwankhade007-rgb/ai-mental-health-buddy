@@ -187,8 +187,7 @@ function App() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex font-sans overflow-hidden transition-colors duration-500"
-      style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+    <div className="h-screen flex font-sans overflow-hidden transition-colors duration-500">
 
       {/* ── Sidebar ── */}
       <aside className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${sidebarOpen ? "w-60" : "w-0"} overflow-hidden
