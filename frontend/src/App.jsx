@@ -20,6 +20,22 @@ const freshConversation = () => ({
   createdAt: Date.now(),
 });
 
+// ── Mood config — expanded ────────────────────────────────────────────────────
+const moodConfig = {
+  Happy:       { emoji: "✨", bg: "bg-yellow-100 dark:bg-yellow-400/20",  text: "text-yellow-700 dark:text-yellow-300",  border: "border-yellow-300 dark:border-yellow-500/40",  glow: "shadow-yellow-200 dark:shadow-yellow-500/20" },
+  Sad:         { emoji: "🌧️", bg: "bg-blue-100 dark:bg-blue-400/20",      text: "text-blue-700 dark:text-blue-300",       border: "border-blue-300 dark:border-blue-500/40",      glow: "shadow-blue-200 dark:shadow-blue-500/20" },
+  Stressed:    { emoji: "⛈️", bg: "bg-orange-100 dark:bg-orange-400/20",  text: "text-orange-700 dark:text-orange-300",  border: "border-orange-300 dark:border-orange-500/40",  glow: "shadow-orange-200 dark:shadow-orange-500/20" },
+  Anxious:     { emoji: "🍃", bg: "bg-teal-100 dark:bg-teal-400/20",      text: "text-teal-700 dark:text-teal-300",       border: "border-teal-300 dark:border-teal-500/40",      glow: "shadow-teal-200 dark:shadow-teal-500/20" },
+  Neutral:     { emoji: "☕", bg: "bg-purple-100 dark:bg-purple-400/20",  text: "text-purple-700 dark:text-purple-300",  border: "border-purple-300 dark:border-purple-500/40",  glow: "shadow-purple-200 dark:shadow-purple-500/20" },
+  Love:        { emoji: "💕", bg: "bg-pink-100 dark:bg-pink-400/20",      text: "text-pink-700 dark:text-pink-300",       border: "border-pink-300 dark:border-pink-500/40",      glow: "shadow-pink-200 dark:shadow-pink-500/20" },
+  Motivated:   { emoji: "🔥", bg: "bg-red-100 dark:bg-red-400/20",        text: "text-red-700 dark:text-red-300",         border: "border-red-300 dark:border-red-500/40",        glow: "shadow-red-200 dark:shadow-red-500/20" },
+  Lonely:      { emoji: "🌙", bg: "bg-indigo-100 dark:bg-indigo-400/20",  text: "text-indigo-700 dark:text-indigo-300",  border: "border-indigo-300 dark:border-indigo-500/40",  glow: "shadow-indigo-200 dark:shadow-indigo-500/20" },
+  Overwhelmed: { emoji: "🌊", bg: "bg-cyan-100 dark:bg-cyan-400/20",      text: "text-cyan-700 dark:text-cyan-300",       border: "border-cyan-300 dark:border-cyan-500/40",      glow: "shadow-cyan-200 dark:shadow-cyan-500/20" },
+  Angry:       { emoji: "😤", bg: "bg-rose-100 dark:bg-rose-400/20",      text: "text-rose-700 dark:text-rose-300",       border: "border-rose-300 dark:border-rose-500/40",      glow: "shadow-rose-200 dark:shadow-rose-500/20" },
+  Grateful:    { emoji: "🌻", bg: "bg-amber-100 dark:bg-amber-400/20",    text: "text-amber-700 dark:text-amber-300",    border: "border-amber-300 dark:border-amber-500/40",    glow: "shadow-amber-200 dark:shadow-amber-500/20" },
+  Tired:       { emoji: "😴", bg: "bg-slate-100 dark:bg-slate-400/20",    text: "text-slate-600 dark:text-slate-300",    border: "border-slate-300 dark:border-slate-500/40",    glow: "shadow-slate-200 dark:shadow-slate-500/20" },
+};
+
 function App() {
   // ── Dark mode ──────────────────────────────────────────────────────────────
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -106,56 +122,116 @@ function App() {
     });
   };
 
-  // ── Send ───────────────────────────────────────────────────────────────────
+  // ── Send — uses SSE streaming ──────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || loading || !activeId) return;
+
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const userInput = input.trim();
     setInput("");
     setLoading(true);
 
     const userMsg = { text: userInput, sender: "user", time };
-    const loadingMsg = { text: "...", sender: "bot", loading: true };
+    // Streaming placeholder — we'll update its text live
+    const streamingMsgId = generateId();
+    const streamingMsg = { id: streamingMsgId, text: "", sender: "bot", time, streaming: true };
 
     updateConversation(activeId, (c) => {
       const isFirst = !c.messages.some((m) => m.sender === "user");
       return {
-        messages: [...c.messages, userMsg, loadingMsg],
+        messages: [...c.messages, userMsg, streamingMsg],
         ...(isFirst ? { title: userInput.slice(0, 42) } : {}),
       };
     });
 
     try {
-      const history = messages.filter((m) => !m.loading);
+      const history = messages.filter((m) => !m.loading && !m.streaming);
       const res = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userInput, history }),
       });
+
       if (!res.ok) throw new Error("API error");
-      const data = await res.json();
-      const botMsg = { text: data.reply, sender: "bot", time, mood: data.mood };
+
+      // Read the SSE stream
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalReply = "";
+      let finalMood = "Neutral";
+      let jsonBuffer = ""; // accumulate the JSON the model is building
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+
+          try {
+            const event = JSON.parse(raw);
+
+            if (event.done) {
+              // Final structured event from server
+              finalReply = event.reply;
+              finalMood = event.mood;
+            } else if (event.delta) {
+              // Accumulate the JSON being streamed character by character
+              jsonBuffer += event.delta;
+
+              // Try to extract the reply field as it builds up, for live display
+              // Match: "reply":"<anything so far>"
+              const replyMatch = jsonBuffer.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+              if (replyMatch) {
+                const liveText = replyMatch[1]
+                  .replace(/\\n/g, "\n")
+                  .replace(/\\"/g, '"')
+                  .replace(/\\\\/g, "\\");
+
+                // Update the streaming bubble live
+                updateConversation(activeId, (c) => ({
+                  messages: c.messages.map((m) =>
+                    m.id === streamingMsgId ? { ...m, text: liveText, streaming: true } : m
+                  ),
+                }));
+              }
+            }
+          } catch {
+            // Ignore malformed events
+          }
+        }
+      }
+
+      // Commit the final, clean message with mood
+      const botMsg = {
+        text: finalReply || jsonBuffer,
+        sender: "bot",
+        time,
+        mood: finalMood,
+        streaming: false,
+      };
+
       updateConversation(activeId, (c) => ({
-        messages: c.messages.map((m) => (m.loading ? botMsg : m)),
+        messages: c.messages.map((m) => (m.id === streamingMsgId ? botMsg : m)),
       }));
     } catch {
       updateConversation(activeId, (c) => ({
         messages: c.messages.map((m) =>
-          m.loading ? { text: "Oops! Couldn't reach the server. Try again 🥺", sender: "bot", time } : m
+          m.id === streamingMsgId
+            ? { text: "Oops! Couldn't reach the server. Try again 🥺", sender: "bot", time, streaming: false }
+            : m
         ),
       }));
     } finally {
       setLoading(false);
     }
-  };
-
-  // ── Mood config ────────────────────────────────────────────────────────────
-  const moodConfig = {
-    Happy:   { emoji: "✨", bg: "bg-yellow-100 dark:bg-yellow-400/20", text: "text-yellow-700 dark:text-yellow-300", border: "border-yellow-300 dark:border-yellow-500/40", glow: "shadow-yellow-200 dark:shadow-yellow-500/20" },
-    Sad:     { emoji: "🌧️", bg: "bg-blue-100 dark:bg-blue-400/20",   text: "text-blue-700 dark:text-blue-300",    border: "border-blue-300 dark:border-blue-500/40",   glow: "shadow-blue-200 dark:shadow-blue-500/20" },
-    Stressed:{ emoji: "⛈️", bg: "bg-orange-100 dark:bg-orange-400/20",text: "text-orange-700 dark:text-orange-300",border: "border-orange-300 dark:border-orange-500/40",glow: "shadow-orange-200 dark:shadow-orange-500/20" },
-    Anxious: { emoji: "🍃", bg: "bg-teal-100 dark:bg-teal-400/20",   text: "text-teal-700 dark:text-teal-300",    border: "border-teal-300 dark:border-teal-500/40",   glow: "shadow-teal-200 dark:shadow-teal-500/20" },
-    Neutral: { emoji: "☕", bg: "bg-purple-100 dark:bg-purple-400/20",text: "text-purple-700 dark:text-purple-300",border: "border-purple-300 dark:border-purple-500/40",glow: "shadow-purple-200 dark:shadow-purple-500/20" },
   };
 
   // ── Affirmations ───────────────────────────────────────────────────────────
@@ -164,6 +240,7 @@ function App() {
     "It's okay to feel whatever you're feeling. 💛",
     "You are worthy of care & kindness. ✨",
     "One step at a time. Be gentle with yourself. 🍃",
+    "Your feelings are valid. You are not alone. 💜",
   ];
   const [affirmation] = useState(
     () => affirmations[Math.floor(Math.random() * affirmations.length)]
@@ -227,6 +304,7 @@ function App() {
                     <span className="flex-1 truncate">{conv.title}</span>
                     <span role="button" tabIndex={0}
                       onClick={(e) => deleteConversation(conv.id, e)}
+                      onKeyDown={(e) => e.key === "Enter" && deleteConversation(conv.id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all flex-shrink-0">
                       <Trash2 className="w-3 h-3" />
                     </span>
@@ -278,7 +356,7 @@ function App() {
             className="p-2.5 rounded-xl bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10
               text-gray-600 dark:text-gray-300 transition-all duration-300 hover:scale-110 active:scale-95"
             aria-label="Toggle dark mode">
-            {isDarkMode ? <Sun className="w-4.5 h-4.5 w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
+            {isDarkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
           </button>
         </header>
 
@@ -301,7 +379,7 @@ function App() {
           )}
 
           {messages.map((msg, index) => (
-            <div key={index} className={`flex flex-col gap-1 ${msg.sender === "user" ? "items-end" : "items-start"}`}>
+            <div key={msg.id ?? index} className={`flex flex-col gap-1 ${msg.sender === "user" ? "items-end" : "items-start"}`}>
 
               {/* Mood badge */}
               {msg.sender === "bot" && msg.mood && (() => {
@@ -337,18 +415,27 @@ function App() {
                        border border-gray-100 dark:border-white/5
                        shadow-md shadow-gray-200/60 dark:shadow-black/20`
                 }`}>
-                  {msg.loading ? (
+                  {/* Streaming / loading indicator */}
+                  {msg.sender === "bot" && (msg.streaming || msg.loading) && !msg.text ? (
                     <div className="flex gap-1.5 items-center py-0.5">
                       <span className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: "0ms" }} />
                       <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "140ms" }} />
                       <span className="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "280ms" }} />
                     </div>
-                  ) : msg.text}
+                  ) : (
+                    <>
+                      {msg.text}
+                      {/* Blinking cursor while streaming */}
+                      {msg.streaming && msg.text && (
+                        <span className="inline-block w-0.5 h-4 bg-pink-400 ml-0.5 animate-pulse align-middle" />
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Timestamp */}
-              {!msg.loading && (
+              {!msg.loading && !msg.streaming && (
                 <p className={`text-[10.5px] text-gray-400 dark:text-gray-500 ${msg.sender === "user" ? "mr-11" : "ml-11"}`}>
                   {msg.time}
                 </p>
@@ -390,7 +477,7 @@ function App() {
                   ? "bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
                   : "bg-gradient-to-br from-pink-500 to-violet-600 text-white shadow-lg shadow-violet-500/30 hover:scale-110 active:scale-95 hover:shadow-violet-500/50"
               }`}>
-              <Send className={`w-4.5 h-4.5 w-[18px] h-[18px] ${loading ? "animate-pulse" : ""} -translate-x-px translate-y-px`} />
+              <Send className={`w-[18px] h-[18px] ${loading ? "animate-pulse" : ""} -translate-x-px translate-y-px`} />
             </button>
           </div>
         </div>
