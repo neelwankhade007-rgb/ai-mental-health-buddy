@@ -20,7 +20,12 @@ const freshConversation = () => ({
   createdAt: Date.now(),
 });
 
-// ── Mood config — expanded ────────────────────────────────────────────────────
+// Determine backend API URL: always use localhost in development mode
+const API_BASE_URL = import.meta.env.DEV
+  ? "http://localhost:5000"
+  : (import.meta.env.VITE_API_URL || "http://localhost:5000");
+
+// ── Mood config ─────────────────────────────────────────────────────────────
 const moodConfig = {
   Happy:       { emoji: "✨", bg: "bg-yellow-100 dark:bg-yellow-400/20",  text: "text-yellow-700 dark:text-yellow-300",  border: "border-yellow-300 dark:border-yellow-500/40",  glow: "shadow-yellow-200 dark:shadow-yellow-500/20" },
   Sad:         { emoji: "🌧️", bg: "bg-blue-100 dark:bg-blue-400/20",      text: "text-blue-700 dark:text-blue-300",       border: "border-blue-300 dark:border-blue-500/40",      glow: "shadow-blue-200 dark:shadow-blue-500/20" },
@@ -49,6 +54,18 @@ function App() {
     document.documentElement.classList.toggle("dark", isDarkMode);
     localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
   }, [isDarkMode]);
+
+  // ── Warmup Ping on Load ────────────────────────────────────────────────────
+  useEffect(() => {
+    const warmupBackend = async () => {
+      try {
+        await fetch(API_BASE_URL);
+      } catch (error) {
+        console.warn("Silent warmup ping failed (the server might still be starting up):", error);
+      }
+    };
+    warmupBackend();
+  }, []);
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -122,9 +139,16 @@ function App() {
     });
   };
 
-  // ── Send — uses SSE streaming ──────────────────────────────────────────────
+  const abortControllerRef = useRef(null);
+
+  // ── Send — uses robust SSE streaming ────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || loading || !activeId) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
 
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const userInput = input.trim();
@@ -132,7 +156,7 @@ function App() {
     setLoading(true);
 
     const userMsg = { text: userInput, sender: "user", time };
-    // Streaming placeholder — we'll update its text live
+    // Streaming placeholder msg — shows bouncing dots until first stream chunk arrives
     const streamingMsgId = generateId();
     const streamingMsg = { id: streamingMsgId, text: "", sender: "bot", time, streaming: true };
 
@@ -146,10 +170,11 @@ function App() {
 
     try {
       const history = messages.filter((m) => !m.loading && !m.streaming);
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
+      const res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userInput, history }),
+        signal: abortControllerRef.current.signal
       });
 
       if (!res.ok) throw new Error("API error");
@@ -159,8 +184,7 @@ function App() {
       const decoder = new TextDecoder();
       let buffer = "";
       let finalReply = "";
-      let finalMood = "Neutral";
-      let jsonBuffer = ""; // accumulate the JSON the model is building
+      let currentMood = "Neutral";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -177,51 +201,49 @@ function App() {
 
           try {
             const event = JSON.parse(raw);
-
-            if (event.done) {
-              // Final structured event from server
-              finalReply = event.reply;
-              finalMood = event.mood;
-            } else if (event.delta) {
-              // Accumulate the JSON being streamed character by character
-              jsonBuffer += event.delta;
-
-              // Try to extract the reply field as it builds up, for live display
-              // Match: "reply":"<anything so far>"
-              const replyMatch = jsonBuffer.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-              if (replyMatch) {
-                const liveText = replyMatch[1]
-                  .replace(/\\n/g, "\n")
-                  .replace(/\\"/g, '"')
-                  .replace(/\\\\/g, "\\");
-
-                // Update the streaming bubble live
-                updateConversation(activeId, (c) => ({
-                  messages: c.messages.map((m) =>
-                    m.id === streamingMsgId ? { ...m, text: liveText, streaming: true } : m
-                  ),
-                }));
-              }
+            
+            if (event.error) {
+               finalReply += event.delta || "";
+            } else if (event.done) {
+               // The final complete message
+               if (event.reply) finalReply = event.reply;
+               if (event.mood) currentMood = event.mood;
+            } else {
+               if (event.mood) currentMood = event.mood;
+               if (event.delta) finalReply += event.delta;
+               
+               // Update the UI in real-time
+               updateConversation(activeId, (c) => ({
+                 messages: c.messages.map((m) => 
+                   m.id === streamingMsgId 
+                     ? { ...m, text: finalReply, mood: currentMood, streaming: true }
+                     : m
+                 ),
+               }));
             }
           } catch {
-            // Ignore malformed events
+            // Ignore malformed events during stream
           }
         }
       }
 
-      // Commit the final, clean message with mood
+      // Commit the final, clean, and fully-parsed message with mood
       const botMsg = {
-        text: finalReply || jsonBuffer,
+        text: finalReply || "Oops! Something went wrong on my end. Please try again 🥺",
         sender: "bot",
         time,
-        mood: finalMood,
+        mood: currentMood,
         streaming: false,
       };
 
       updateConversation(activeId, (c) => ({
         messages: c.messages.map((m) => (m.id === streamingMsgId ? botMsg : m)),
       }));
-    } catch {
+    } catch (error) {
+      if (error.name === "AbortError") {
+         console.log("Request aborted");
+         return; // Do not update UI to failure if explicitly aborted
+      }
       updateConversation(activeId, (c) => ({
         messages: c.messages.map((m) =>
           m.id === streamingMsgId
