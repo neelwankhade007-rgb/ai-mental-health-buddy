@@ -2,10 +2,13 @@
 
 A full-stack AI-powered mental health assistant for students.
 
+[**Live Demo**](https://ai-mental-health-buddy.vercel.app/)
+
 ## Features
 - Real-time chat interface
 - AI-powered emotional support
 - Clean and responsive UI
+- Dark mode toggle (defaults to Light mode)
 - Built with React + Node.js
 
 ## Tech Stack
