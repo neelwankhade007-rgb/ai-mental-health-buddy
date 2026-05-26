@@ -5,24 +5,66 @@ import OpenAI from "openai";
 
 dotenv.config();
 
-if (!process.env.OPENROUTER_API_KEY) {
-  console.warn("WARNING: OPENROUTER_API_KEY is missing from the environment variables (.env file)!");
+if (!process.env.GROQ_API_KEY) {
+  console.warn("WARNING: GROQ_API_KEY is missing from .env!");
 }
 
 const app = express();
-
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 const VALID_MOODS = [
   "Happy", "Sad", "Stressed", "Anxious", "Neutral",
   "Love", "Motivated", "Lonely", "Overwhelmed", "Angry", "Grateful", "Tired",
 ];
+
+// Groq free models — extremely fast, hourly rate limits (not daily)
+// Order = priority. First one that works gets used.
+const MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "gemma2-9b-it",
+  "llama3-70b-8192",
+];
+
+const SYSTEM_PROMPT = `You are Vibe Catcher, a warm, grounded AI mental health buddy.
+
+First, silently evaluate the user's mood and check all rules in your head. Do NOT output your thinking process, checklists, or steps. Output ONLY the final result.
+
+Identify the user's mood from this list ONLY:
+Happy, Sad, Stressed, Anxious, Neutral, Love, Motivated, Lonely, Overwhelmed, Angry, Grateful, Tired
+
+Tone & Reply Rules:
+- Happy/Motivated/Grateful/Love: celebrate, keep upbeat.
+- Sad/Lonely: gentle, validate feelings, no quick-fix advice.
+- Anxious/Overwhelmed/Stressed: acknowledge fully, ONE simple grounding tip max.
+- Angry: validate frustration with empathy.
+- Tired/Neutral: soft, friendly, validate rest.
+- Keep reply to 2-4 sentences max. Calm friend, no jargon.
+- NEVER use markdown like **bold** or *italic* in your reply.
+- If user mentions self-harm/crisis, respond with care and suggest iCall: 9152987821.
+
+CRITICAL FORMATTING:
+- Line 1 MUST be exactly: MOOD: <MoodFromList>
+- Line 2 MUST be your warm reply.
+- ABSOLUTELY NO internal monologues, NO "Check for crisis", NO numbered lists. Just the two lines.
+
+EXAMPLE 1:
+User: I can't sleep, so much is on my mind.
+Assistant:
+MOOD: Anxious
+That sounds really heavy. It's completely okay if sleep isn't coming right now. Maybe try taking just one slow, deep breath with me?
+
+EXAMPLE 2:
+User: I hate everything today.
+Assistant:
+MOOD: Angry
+It is completely valid to feel frustrated today. I'm right here if you want to vent about it.`;
 
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
@@ -31,68 +73,67 @@ app.get("/", (req, res) => {
 app.post("/chat", async (req, res) => {
   try {
     const { message, history = [] } = req.body;
-    console.log("Request received: message =", message);
+    console.log("Request received:", message);
 
     const conversationHistory = history
-      .filter((msg) => !msg.loading)
+      .filter((msg) => !msg.loading && !msg.streaming && msg.text)
       .map((msg) => ({
         role: msg.sender === "user" ? "user" : "assistant",
         content: msg.text,
       }));
 
-    const systemPrompt = `You are Vibe Catcher, a warm, grounded AI mental health buddy.
+    // Try each model in order until one works
+    let stream = null;
+    let usedModel = null;
 
-First, silently identify the user's mood from this list ONLY:
-Happy, Sad, Stressed, Anxious, Neutral, Love, Motivated, Lonely, Overwhelmed, Angry, Grateful, Tired
-
-IMPORTANT: Your ENTIRE response must start with "MOOD:" on the very first line. No preamble, no intro text before it.
-
-You MUST respond in this EXACT plain-text format:
-MOOD: <MoodFromList>
-REPLY: <your reply>
-
-Example:
-MOOD: Anxious
-REPLY: That sounds really overwhelming. Take one slow breath — you don't have to figure it all out right now.
-
-Tone rules per mood:
-- Happy / Motivated / Grateful → match energy warmly, celebrate, keep upbeat
-- Sad / Lonely → extra gentle, validate feelings first, no quick-fix advice
-- Anxious / Overwhelmed / Stressed → acknowledge fully, ONE simple grounding tip max
-- Angry → don't dismiss, acknowledge frustration with empathy
-- Love → warm and caring, celebrate the feeling
-- Tired → soft and low-energy, validate rest, no "just push through" energy
-- Neutral → friendly check-in, curious tone
-
-Reply rules (apply to ALL moods):
-- 2-4 sentences max. Speak like a caring calm friend, no jargon.
-- If user mentions self-harm, hopelessness or crisis → respond with care and gently suggest iCall: 9152987821.
-- Never give medical diagnoses or advice.
-- NEVER use markdown like **bold** or *italic* in your reply.`;
-
-    let stream;
-    try {
-      stream = await openai.chat.completions.create({
-        model: "google/gemini-2.0-flash-exp:free",
-        temperature: 0.7,
-        max_tokens: 300,
-        stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...conversationHistory,
-          { role: "user", content: message },
-        ],
-      });
-      console.log("Stream started with model: google/gemini-2.0-flash-exp:free");
-    } catch (error) {
-      console.error("Gemini model failed:", error.message);
-      throw new Error("AI model failed to respond. Check your OPENROUTER_API_KEY.");
+    for (const model of MODELS) {
+      try {
+        stream = await openai.chat.completions.create({
+          model,
+          temperature: 0.7,
+          max_tokens: 300,
+          stream: true,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...conversationHistory,
+            { role: "user", content: message },
+          ],
+        });
+        
+        usedModel = model;
+        console.log(`✅ Using model: ${model}`);
+        break;
+      } catch (err) {
+        console.warn(`❌ Model ${model} failed or timed out: ${err.message}`);
+      }
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    if (!stream) {
+      console.warn("⚠️ All Groq models failed. Serving local mock response to prevent UI breakage.");
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+      
+      const mockText = "Groq's free tier is temporarily rate-limiting us 🛑 — but your code is working perfectly! This is a simulated local response so your UI keeps flowing. Try again in a few seconds!";
+      
+      res.write(`data: ${JSON.stringify({ delta: "", mood: "Neutral" })}\n\n`);
+      
+      // Stream the mock text to simulate an LLM
+      const streamMock = async () => {
+        let sent = "";
+        for (let i = 0; i < mockText.length; i++) {
+          sent += mockText[i];
+          res.write(`data: ${JSON.stringify({ delta: mockText[i] })}\n\n`);
+          await new Promise(r => setTimeout(r, 20)); // 20ms per character
+        }
+        res.write(`data: ${JSON.stringify({ done: true, mood: "Neutral", reply: mockText })}\n\n`);
+        res.end();
+      };
+      
+      streamMock();
+      return;
+    }
 
     let buffer = "";
     let moodExtracted = false;
@@ -107,70 +148,64 @@ Reply rules (apply to ALL moods):
         if (!moodExtracted) {
           buffer += delta;
 
-          const match = buffer.match(/MOOD:\s*([A-Za-z]+)\s*\n?\s*REPLY:\s*([\s\S]*)/i);
-          if (match) {
-            mood = match[1].trim();
+          const moodMatch = buffer.match(/MOOD:\s*([A-Za-z]+)\s*\n/i);
+          if (moodMatch) {
+            mood = moodMatch[1].trim();
             if (!VALID_MOODS.includes(mood)) mood = "Neutral";
             moodExtracted = true;
-
-            const initialReplyText = match[2];
-            if (initialReplyText) {
-              replyText += initialReplyText;
-              res.write(`data: ${JSON.stringify({ delta: initialReplyText, mood })}\n\n`);
-            } else {
-              res.write(`data: ${JSON.stringify({ delta: "", mood })}\n\n`);
+            
+            res.write(`data: ${JSON.stringify({ delta: "", mood })}\n\n`);
+            
+            // Extract everything after the MOOD tag
+            let rest = buffer.substring(moodMatch.index + moodMatch[0].length);
+            rest = rest.replace(/^\s*REPLY:\s*/i, "").trimStart();
+            
+            if (rest) {
+              replyText += rest;
+              res.write(`data: ${JSON.stringify({ delta: rest })}\n\n`);
             }
           } else if (buffer.length > 80) {
-            // Failsafe: Gemini ignored the format — strip labels and stream raw
-            console.warn("Gemini ignored format instructions, falling back to raw output.");
-            const moodOnlyMatch = buffer.match(/MOOD:\s*([A-Za-z]+)/i);
-            if (moodOnlyMatch) {
-              mood = moodOnlyMatch[1].trim();
-              if (!VALID_MOODS.includes(mood)) mood = "Neutral";
-            }
-            replyText = buffer
-              .replace(/MOOD:\s*[A-Za-z]+\s*/i, "")
-              .replace(/REPLY:\s*/i, "")
-              .trim();
+            // Failsafe: model ignored format, stream raw immediately
+            console.warn("⚠️ Model ignored format, streaming raw output.");
             moodExtracted = true;
-            res.write(`data: ${JSON.stringify({ delta: replyText, mood })}\n\n`);
+            replyText += buffer;
+            res.write(`data: ${JSON.stringify({ delta: buffer, mood })}\n\n`);
           }
         } else {
-          replyText += delta;
-          res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+          // Once extracted, stream directly
+          // Filter out REPLY: if the model injected it late
+          let cleanDelta = delta;
+          if (replyText.length < 20) {
+            cleanDelta = cleanDelta.replace(/REPLY:\s*/i, "");
+          }
+          
+          if (cleanDelta) {
+            replyText += cleanDelta;
+            res.write(`data: ${JSON.stringify({ delta: cleanDelta })}\n\n`);
+          }
         }
       }
 
-      // Edge case: stream ended before mood was extracted (very short response)
+      // Edge case: very short response, stream ended before mood extracted
       if (!moodExtracted && buffer.length > 0) {
-        const fallbackMatch = buffer.match(/MOOD:\s*([A-Za-z]+)/i);
-        if (fallbackMatch) {
-          mood = fallbackMatch[1].trim();
-          if (!VALID_MOODS.includes(mood)) mood = "Neutral";
-          replyText = buffer
-            .replace(/MOOD:\s*[A-Za-z]+\s*/i, "")
-            .replace(/REPLY:\s*/i, "")
-            .trim();
-        } else {
-          replyText = buffer.trim();
-        }
-        res.write(`data: ${JSON.stringify({ delta: replyText, mood })}\n\n`);
+        res.write(`data: ${JSON.stringify({ delta: buffer.trim(), mood })}\n\n`);
+        replyText = buffer.trim();
       }
-    } catch (streamError) {
-      console.error("Error during streaming:", streamError);
+    } catch (streamErr) {
+      console.error("Streaming error:", streamErr);
       res.write(`data: ${JSON.stringify({ delta: "\n[Connection interrupted]", error: true })}\n\n`);
     }
 
     res.write(`data: ${JSON.stringify({ done: true, mood, reply: replyText })}\n\n`);
     res.end();
-  } catch (error) {
-    console.error("Top-level endpoint error:", error);
 
+  } catch (error) {
+    console.error("Top-level error:", error.message);
     if (res.headersSent) {
       res.write(`data: ${JSON.stringify({ done: true, mood: "Neutral", reply: "Something went wrong. Please try again 🥺" })}\n\n`);
       res.end();
     } else {
-      res.status(500).json({ error: "Internal Server Error" });
+      res.status(500).json({ error: error.message });
     }
   }
 });

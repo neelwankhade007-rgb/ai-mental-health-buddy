@@ -142,8 +142,9 @@ function App() {
   const abortControllerRef = useRef(null);
 
   // ── Send — uses robust SSE streaming ────────────────────────────────────────
-  const sendMessage = async () => {
-    if (!input.trim() || loading || !activeId) return;
+  const sendMessage = async (overrideInput) => {
+    const userInput = (typeof overrideInput === 'string' ? overrideInput : input).trim();
+    if (!userInput || loading || !activeId) return;
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -151,7 +152,6 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const userInput = input.trim();
     setInput("");
     setLoading(true);
 
@@ -256,7 +256,25 @@ function App() {
     }
   };
 
+  const sendQuickPrompt = (prompt) => {
+    if (loading) return;
+    setInput(prompt);
+    // Small timeout so input state updates before sendMessage reads it
+    setTimeout(() => {
+      sendMessage(prompt);
+    }, 0);
+  };
+
   // ── Affirmations ───────────────────────────────────────────────────────────
+  const quickPrompts = [
+    "I'm feeling anxious today 😟",
+    "I just need to vent 💬",
+    "I can't sleep at all 😴",
+    "I'm feeling really lonely 🌙",
+    "I'm so stressed with studies 📚",
+    "I'm actually feeling great today! ✨",
+  ];
+
   const affirmations = [
     "Take a deep breath. You are doing your best. 🌸",
     "It's okay to feel whatever you're feeling. 💛",
@@ -397,6 +415,29 @@ function App() {
                   {affirmation}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Quick prompt chips — only on fresh chats */}
+          {messages.length <= 1 && (
+            <div className="flex flex-wrap justify-center gap-2 px-2">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => sendQuickPrompt(prompt)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-full text-[13px] font-medium
+                    bg-white/80 dark:bg-white/5 backdrop-blur
+                    border border-violet-200 dark:border-violet-500/30
+                    text-violet-600 dark:text-violet-300
+                    hover:bg-violet-50 dark:hover:bg-violet-500/10
+                    hover:border-violet-400 dark:hover:border-violet-400/50
+                    transition-all duration-200 hover:scale-105 active:scale-95
+                    shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
           )}
 
