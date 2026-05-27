@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import {
   Moon, Sun, Send, Sparkles, Smile, HeartPulse,
   Plus, MessageSquare, Trash2, Menu,
@@ -25,21 +26,6 @@ const API_BASE_URL = import.meta.env.DEV
   ? "http://localhost:5000"
   : (import.meta.env.VITE_API_URL || "http://localhost:5000");
 
-// ── Mood config ─────────────────────────────────────────────────────────────
-const moodConfig = {
-  Happy:       { emoji: "✨", bg: "bg-yellow-100 dark:bg-yellow-400/20",  text: "text-yellow-700 dark:text-yellow-300",  border: "border-yellow-300 dark:border-yellow-500/40",  glow: "shadow-yellow-200 dark:shadow-yellow-500/20" },
-  Sad:         { emoji: "🌧️", bg: "bg-blue-100 dark:bg-blue-400/20",      text: "text-blue-700 dark:text-blue-300",       border: "border-blue-300 dark:border-blue-500/40",      glow: "shadow-blue-200 dark:shadow-blue-500/20" },
-  Stressed:    { emoji: "⛈️", bg: "bg-orange-100 dark:bg-orange-400/20",  text: "text-orange-700 dark:text-orange-300",  border: "border-orange-300 dark:border-orange-500/40",  glow: "shadow-orange-200 dark:shadow-orange-500/20" },
-  Anxious:     { emoji: "🍃", bg: "bg-teal-100 dark:bg-teal-400/20",      text: "text-teal-700 dark:text-teal-300",       border: "border-teal-300 dark:border-teal-500/40",      glow: "shadow-teal-200 dark:shadow-teal-500/20" },
-  Neutral:     { emoji: "☕", bg: "bg-purple-100 dark:bg-purple-400/20",  text: "text-purple-700 dark:text-purple-300",  border: "border-purple-300 dark:border-purple-500/40",  glow: "shadow-purple-200 dark:shadow-purple-500/20" },
-  Love:        { emoji: "💕", bg: "bg-pink-100 dark:bg-pink-400/20",      text: "text-pink-700 dark:text-pink-300",       border: "border-pink-300 dark:border-pink-500/40",      glow: "shadow-pink-200 dark:shadow-pink-500/20" },
-  Motivated:   { emoji: "🔥", bg: "bg-red-100 dark:bg-red-400/20",        text: "text-red-700 dark:text-red-300",         border: "border-red-300 dark:border-red-500/40",        glow: "shadow-red-200 dark:shadow-red-500/20" },
-  Lonely:      { emoji: "🌙", bg: "bg-indigo-100 dark:bg-indigo-400/20",  text: "text-indigo-700 dark:text-indigo-300",  border: "border-indigo-300 dark:border-indigo-500/40",  glow: "shadow-indigo-200 dark:shadow-indigo-500/20" },
-  Overwhelmed: { emoji: "🌊", bg: "bg-cyan-100 dark:bg-cyan-400/20",      text: "text-cyan-700 dark:text-cyan-300",       border: "border-cyan-300 dark:border-cyan-500/40",      glow: "shadow-cyan-200 dark:shadow-cyan-500/20" },
-  Angry:       { emoji: "😤", bg: "bg-rose-100 dark:bg-rose-400/20",      text: "text-rose-700 dark:text-rose-300",       border: "border-rose-300 dark:border-rose-500/40",      glow: "shadow-rose-200 dark:shadow-rose-500/20" },
-  Grateful:    { emoji: "🌻", bg: "bg-amber-100 dark:bg-amber-400/20",    text: "text-amber-700 dark:text-amber-300",    border: "border-amber-300 dark:border-amber-500/40",    glow: "shadow-amber-200 dark:shadow-amber-500/20" },
-  Tired:       { emoji: "😴", bg: "bg-slate-100 dark:bg-slate-400/20",    text: "text-slate-600 dark:text-slate-300",    border: "border-slate-300 dark:border-slate-500/40",    glow: "shadow-slate-200 dark:shadow-slate-500/20" },
-};
 
 function App() {
   // ── Dark mode ──────────────────────────────────────────────────────────────
@@ -444,17 +430,6 @@ function App() {
           {messages.map((msg, index) => (
             <div key={msg.id ?? index} className={`flex flex-col gap-1 ${msg.sender === "user" ? "items-end" : "items-start"}`}>
 
-              {/* Mood badge */}
-              {msg.sender === "bot" && msg.mood && (() => {
-                const m = moodConfig[msg.mood] || moodConfig.Neutral;
-                return (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest
-                    border shadow-sm ${m.bg} ${m.text} ${m.border} ${m.glow}`}>
-                    {m.emoji} {msg.mood}
-                  </span>
-                );
-              })()}
-
               <div className={`flex items-end gap-2.5 max-w-[82%] ${msg.sender === "user" ? "flex-row-reverse" : "flex-row"}`}>
 
                 {/* Avatar */}
@@ -469,7 +444,7 @@ function App() {
                 </div>
 
                 {/* Bubble */}
-                <div className={`px-5 py-3.5 text-[14.5px] leading-relaxed whitespace-pre-wrap break-words transition-all duration-300 ${
+                <div className={`px-5 py-3.5 text-[14.5px] leading-relaxed break-words transition-all duration-300 ${
                   msg.sender === "user"
                     ? `bg-gradient-to-br from-violet-500 to-indigo-600 text-white
                        rounded-2xl rounded-br-md shadow-lg shadow-violet-500/25`
@@ -487,8 +462,26 @@ function App() {
                     </div>
                   ) : (
                     <>
-                      {msg.text}
-                      {/* Blinking cursor while streaming */}
+                      <ReactMarkdown
+                        components={{
+                          code({ inline, className, children, ...props }) {
+                            return inline ? (
+                              <code className="bg-black/10 dark:bg-white/10 px-1.5 py-0.5 rounded text-[13px] font-mono" {...props}>{children}</code>
+                            ) : (
+                              <pre className="bg-gray-900 dark:bg-black/40 text-gray-100 rounded-xl p-4 overflow-x-auto my-2 text-[13px] font-mono">
+                                <code {...props}>{children}</code>
+                              </pre>
+                            );
+                          },
+                          p({ children }) { return <p className="mb-2 last:mb-0">{children}</p>; },
+                          ul({ children }) { return <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>; },
+                          ol({ children }) { return <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>; },
+                          li({ children }) { return <li className="text-[14px]">{children}</li>; },
+                          strong({ children }) { return <strong className="font-semibold">{children}</strong>; },
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
                       {msg.streaming && msg.text && (
                         <span className="inline-block w-0.5 h-4 bg-pink-400 ml-0.5 animate-pulse align-middle" />
                       )}
