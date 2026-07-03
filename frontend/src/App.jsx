@@ -54,7 +54,28 @@ function App() {
   }, []);
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
+
+  const lastWidth = useRef(typeof window !== "undefined" ? window.innerWidth : 1024);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 768 && lastWidth.current >= 768) {
+        setSidebarOpen(false);
+      } else if (width >= 768 && lastWidth.current < 768) {
+        setSidebarOpen(true);
+      }
+      lastWidth.current = width;
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // ── Conversations ──────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState(() => {
@@ -109,6 +130,9 @@ function App() {
     setConversations((prev) => [conv, ...prev]);
     setActiveId(conv.id);
     setInput("");
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
   };
 
   const deleteConversation = (id, e) => {
@@ -292,10 +316,20 @@ function App() {
   return (
     <div className="h-screen flex font-sans overflow-hidden transition-colors duration-500">
 
+      {/* Backdrop overlay for mobile when sidebar is open */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ── */}
-      <aside className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${sidebarOpen ? "w-60" : "w-0"} overflow-hidden
-        bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950
-        border-r border-white/5`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 md:relative md:z-auto w-60 flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
+        sidebarOpen 
+          ? "translate-x-0 md:w-60 border-r border-white/5" 
+          : "-translate-x-full md:w-0 md:translate-x-0 border-r-0 md:border-r-0"
+      } overflow-hidden bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950`}>
 
         {/* New Chat */}
         <div className="p-3 pt-4 flex-shrink-0">
@@ -320,7 +354,13 @@ function App() {
               <div className="space-y-0.5">
                 {convs.map((conv) => (
                   <button key={conv.id}
-                    onClick={() => { setActiveId(conv.id); setInput(""); }}
+                    onClick={() => {
+                      setActiveId(conv.id);
+                      setInput("");
+                      if (window.innerWidth < 768) {
+                        setSidebarOpen(false);
+                      }
+                    }}
                     className={`w-full group flex items-center gap-2 px-3 py-2.5 rounded-xl text-left text-[13px] transition-all duration-150 ${
                       conv.id === activeId
                         ? "bg-white/15 text-white font-medium"
